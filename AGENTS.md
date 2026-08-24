@@ -16,3 +16,14 @@
   - `*Parser.swift`: Parses `~/.claude/` JSON caches (Activity/Cost/Stats).
 - **Models**: `Account.swift`, `*Data.swift` (usage/cost/activity).
 - **Views**: `MainMenuView.swift` (dropdown), `SettingsView.swift` (native window), `HiddenWindowView.swift` (LSUIElement keepalive workaround).
+
+**Fork**: this repo is a security fork of `XueshiQiao/CCSwitcher`. Sparkle's auto-update is
+deliberately off (its appcast is still upstream's, so an update would revert the fork's fixes).
+Read `FORK.md` before touching `UpdateChecker.swift` or the Sparkle keys in `project.yml`.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
