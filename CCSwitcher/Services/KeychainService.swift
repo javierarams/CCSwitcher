@@ -113,13 +113,25 @@ final class KeychainService: Sendable {
         // Delete then add (security CLI doesn't have a pure "update" for generic passwords)
         _ = runSecurityStatus(args: ["delete-generic-password", "-s", claudeService, "-a", claudeAccount])
 
-        let added = runSecurityStatus(args: [
-            "add-generic-password",
-            "-s", claudeService,
-            "-a", claudeAccount,
-            "-w", token,
-            "-U"
-        ])
+        // `-w` LAST and with no value: `security` then reads the password from
+        // stdin instead of argv, keeping the token out of `ps`. Two constraints
+        // make the exact form load-bearing:
+        //   - `-w` WITH a value consumes the next argv element, so `-U` has to
+        //     come before it or it would be eaten as the password.
+        //   - the interactive path prompts twice ("password data" / "retype"),
+        //     so the token must be sent twice. Sending it once makes `security`
+        //     report "passwords don't match" and then exit 0 having stored an
+        //     EMPTY password — a silent credential wipe.
+        let added = runSecurityStatus(
+            args: [
+                "add-generic-password",
+                "-s", claudeService,
+                "-a", claudeAccount,
+                "-U",
+                "-w"
+            ],
+            stdin: "\(token)\n\(token)\n"
+        )
         log.info("[writeClaudeToken] Result: \(added)")
         return added
     }
@@ -403,14 +415,32 @@ final class KeychainService: Sendable {
         }
     }
 
-    private func runSecurityStatus(args: [String]) -> Bool {
+    /// `stdin`, when non-nil, is fed to the process and the pipe is closed
+    /// before waiting. Used to pass secrets that must not appear in argv.
+    private func runSecurityStatus(args: [String], stdin: String? = nil) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         process.arguments = args
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
+
+        var inputPipe: Pipe?
+        if stdin != nil {
+            let pipe = Pipe()
+            inputPipe = pipe
+            process.standardInput = pipe
+        }
+
         do {
             try process.run()
+            if let stdin, let inputPipe {
+                // Write before waiting: the payload is a few KB, well under the
+                // pipe buffer, so this cannot block. Closing the write end is
+                // what lets `security` stop reading and proceed.
+                let handle = inputPipe.fileHandleForWriting
+                handle.write(Data(stdin.utf8))
+                try? handle.close()
+            }
             process.waitUntilExit()
             let ok = process.terminationStatus == 0
             if !ok {
