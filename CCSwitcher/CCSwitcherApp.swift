@@ -37,9 +37,9 @@ struct CCSwitcherApp: App {
                 .onAppear {
                     guard !didBootstrap else { return }
                     didBootstrap = true
-                    // Sparkle's SPUStandardUpdaterController(startingUpdater: true)
-                    // schedules its own background update checks; no need to
-                    // call checkForUpdates here.
+                    // Instantiates the updater (which disables automatic
+                    // checks — see UpdateChecker). Nothing is checked until
+                    // the user asks in Settings.
                     _ = updateChecker
                     statusItemController.install(
                         appState: appState,
