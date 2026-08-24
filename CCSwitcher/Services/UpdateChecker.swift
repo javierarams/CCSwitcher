@@ -18,24 +18,33 @@ final class UpdateChecker: ObservableObject {
     private let controller: SPUStandardUpdaterController
 
     init() {
-        // `startingUpdater: true` enables Sparkle's automatic background
-        // checks at the interval configured by Sparkle (default: 1 day).
-        // No delegates needed: standard UI behavior is what we want.
+        // The updater still STARTS: that is what keeps SUPublicEDKey loaded and
+        // EdDSA verification wired up, so re-pointing SUFeedURL at this fork's
+        // own releases is a one-line change.
         self.controller = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+
+        // SUEnableAutomaticChecks in Info.plist is only the DEFAULT; Sparkle
+        // lets a stored user default win. This fork keeps the upstream bundle
+        // identifier, so a machine that ever ran an upstream build already has
+        // that preference persisted as true and the Info.plist value would
+        // never be consulted. Writing it here is what actually holds.
+        controller.updater.automaticallyChecksForUpdates = false
+        controller.updater.automaticallyDownloadsUpdates = false
     }
 
-    /// Manual = user-initiated; shows Sparkle's full UI including
-    /// "you're up to date" feedback when no update is available.
-    /// Background = silent unless an update is found.
-    func checkForUpdates(manual: Bool = false) {
-        if manual {
-            controller.checkForUpdates(nil)
-        } else {
-            controller.updater.checkForUpdatesInBackground()
-        }
+    /// User-initiated only, and shows Sparkle's full UI including the
+    /// "you're up to date" result.
+    ///
+    /// `manual` is retained for source compatibility but no longer selects a
+    /// background path: `checkForUpdatesInBackground()` ignores
+    /// `automaticallyChecksForUpdates`, so honouring it would reintroduce
+    /// exactly the silent upstream check this fork disables.
+    func checkForUpdates(manual: Bool = true) {
+        _ = manual
+        controller.checkForUpdates(nil)
     }
 }

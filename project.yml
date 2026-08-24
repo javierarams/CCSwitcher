@@ -47,7 +47,14 @@ targets:
               - ccswitcher
         # Sparkle: feed URL points at the always-latest release's appcast asset.
         # CI uploads `appcast.xml` to each release alongside the DMG.
+        #
+        # FORK: this appcast is the UPSTREAM project's (XueshiQiao/CCSwitcher),
+        # and it advertises upstream builds. An automatic check here would
+        # install upstream over this fork and silently revert its security
+        # fixes, so automatic checking is off. Re-enable it only together with
+        # pointing SUFeedURL at this fork's own releases. See FORK.md.
         SUFeedURL: https://github.com/XueshiQiao/CCSwitcher/releases/latest/download/appcast.xml
+        SUEnableAutomaticChecks: false
         # Public EdDSA key. The matching private key is the `SPARKLE_EDDSA_KEY`
         # GitHub secret used by CI to sign each DMG.
         SUPublicEDKey: N9jOZ2Xyo63FdNvkDCRiMwXFnFglOqTdmx6nw7ZwTS4=
