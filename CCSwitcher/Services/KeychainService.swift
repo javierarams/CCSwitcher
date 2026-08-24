@@ -147,7 +147,7 @@ final class KeychainService: Sendable {
             return nil
         }
         let email = (dict["emailAddress"]?.value as? String) ?? "?"
-        log.info("[readOAuthAccount] Found: email=\(email)")
+        log.info("[readOAuthAccount] Found: email=\(email.maskedAsEmailAddress())")
         return dict
     }
 
@@ -166,7 +166,7 @@ final class KeychainService: Sendable {
             let newData = try encoder.encode(json)
             try newData.write(to: URL(fileURLWithPath: claudeJsonPath), options: .atomic)
             let email = (oauthAccount["emailAddress"]?.value as? String) ?? "?"
-            log.info("[writeOAuthAccount] Written: email=\(email)")
+            log.info("[writeOAuthAccount] Written: email=\(email.maskedAsEmailAddress())")
             return true
         } catch {
             log.error("[writeOAuthAccount] Failed: \(error.localizedDescription)")
@@ -178,7 +178,7 @@ final class KeychainService: Sendable {
 
     func saveAccountBackup(token: String, oauthAccount: [String: AnyCodable], forAccountId accountId: String) -> Bool {
         let email = (oauthAccount["emailAddress"]?.value as? String) ?? "?"
-        log.info("[saveBackup] Saving for \(accountId) (\(email)), token length=\(token.count)")
+        log.info("[saveBackup] Saving for \(accountId) (\(email.maskedAsEmailAddress())), token length=\(token.count)")
         storeLock.lock()
         defer { storeLock.unlock() }
         var store: [String: AccountBackup]

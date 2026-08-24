@@ -285,7 +285,7 @@ final class AppState: ObservableObject {
         do {
             // 1. Back up current account (token + oauthAccount) before login overwrites them
             if let current = activeAccount {
-                log.info("[loginNewAccount] Step 1: Backing up current account (\(current.email))...")
+                log.info("[loginNewAccount] Step 1: Backing up current account (\(current.obfuscatedEmail))...")
                 let backed = claudeService.captureCurrentCredentials(forAccountId: current.id.uuidString)
                 log.info("[loginNewAccount] Step 1: Backup result: \(backed)")
             } else {
@@ -312,7 +312,7 @@ final class AppState: ObservableObject {
                 isLoggingIn = false
                 return
             }
-            log.info("[loginNewAccount] Step 3: Logged in as \(email)")
+            log.info("[loginNewAccount] Step 3: Logged in as \(email.maskedAsEmailAddress())")
 
             // 4. Check for duplicate — if exists, refresh its backup and make it
             // the active account. The login DID change what the CLI is
@@ -393,7 +393,7 @@ final class AppState: ObservableObject {
         }
         saveAccounts()
         updateWidgetData()
-        log.info("[updateAccountLabel] Set label for \(account.email): \(trimmed ?? "nil")")
+        log.info("[updateAccountLabel] Set label for \(account.obfuscatedEmail): \(trimmed?.obfuscatedEmail() ?? "nil")")
     }
 
     func removeAccount(_ account: Account) {
@@ -422,7 +422,7 @@ final class AppState: ObservableObject {
             return
         }
 
-        log.info("[switchTo] ===== Switching from \(currentActive.email) to \(account.email) =====")
+        log.info("[switchTo] ===== Switching from \(currentActive.obfuscatedEmail) to \(account.obfuscatedEmail) =====")
 
         // One credential mutation at a time: a switch already in flight (its
         // awaits leave the main actor free) or a running login must finish
@@ -632,7 +632,7 @@ final class AppState: ObservableObject {
 
     /// Re-authenticate an account by running `claude auth login` and capturing fresh credentials.
     func reauthenticateAccount(_ account: Account) async {
-        log.info("[reauth] ===== Re-authenticating account \(account.id) (\(account.email)) =====")
+        log.info("[reauth] ===== Re-authenticating account \(account.id) (\(account.obfuscatedEmail)) =====")
         guard claudeAvailable else {
             errorMessage = String(localized: "Claude CLI not found", bundle: L10n.bundle)
             return
@@ -674,7 +674,7 @@ final class AppState: ObservableObject {
 
             guard email == account.email else {
                 errorMessage = String(localized: "Logged in as \(email), but expected \(account.email). Credentials not updated.", bundle: L10n.bundle)
-                log.error("[reauth] Email mismatch: got \(email), expected \(account.email)")
+                log.error("[reauth] Email mismatch: got \(email.maskedAsEmailAddress()), expected \(account.obfuscatedEmail)")
                 isLoggingIn = false
                 return
             }
@@ -876,7 +876,7 @@ final class AppState: ObservableObject {
                 tokenJSON = keychain.getAccountBackup(forAccountId: account.id.uuidString)?.token
             }
             guard let tokenJSON, let accessToken = ClaudeService.extractAccessToken(from: tokenJSON) else {
-                log.warning("[fetchUsage] No token for \(account.email), skipping")
+                log.warning("[fetchUsage] No token for \(account.obfuscatedEmail), skipping")
                 continue
             }
             do {
@@ -884,13 +884,13 @@ final class AppState: ObservableObject {
                 accountUsage[account.id] = usage
                 accountUsageSampledAt[account.id] = Date()
                 accountUsageErrors[account.id] = nil
-                log.info("[fetchUsage] \(account.email): session=\(usage.fiveHour?.utilization ?? -1)%, weekly=\(usage.sevenDay?.utilization ?? -1)%")
+                log.info("[fetchUsage] \(account.obfuscatedEmail): session=\(usage.fiveHour?.utilization ?? -1)%, weekly=\(usage.sevenDay?.utilization ?? -1)%")
             } catch ClaudeService.UsageError.forbidden {
                 // No active Pro/Max subscription on this account (e.g. the plan
                 // lapsed) - usage is meaningless until it recovers. Observed as:
                 // {"error":{"type":"permission_error","message":"OAuth
                 // authentication is currently not allowed for this organization."}}
-                log.warning("[fetchUsage] \(account.email) forbidden (no active subscription?)")
+                log.warning("[fetchUsage] \(account.obfuscatedEmail) forbidden (no active subscription?)")
                 accountUsage[account.id] = nil
                 accountUsageSampledAt[account.id] = nil
                 accountUsageErrors[account.id] = UsageErrorState(isExpired: false, isRateLimited: false, message: String(localized: "No active subscription on this account (OAuth not allowed).", bundle: L10n.bundle))
@@ -905,7 +905,7 @@ final class AppState: ObservableObject {
                     accountUsageErrors[account.id] = UsageErrorState(isExpired: false, isRateLimited: true, message: String(localized: "API Rate Limited. Try again later.", bundle: L10n.bundle))
                 }
             } catch ClaudeService.UsageError.expired {
-                log.warning("[fetchUsage] Token expired for \(account.email)")
+                log.warning("[fetchUsage] Token expired for \(account.obfuscatedEmail)")
                 if account.isActive {
                     // Active account: delegated refresh via `claude auth status` is safe (no keychain swap)
                     do {
@@ -918,7 +918,7 @@ final class AppState: ObservableObject {
                             accountUsage[account.id] = usage
                             accountUsageSampledAt[account.id] = Date()
                             accountUsageErrors[account.id] = nil
-                            log.info("[fetchUsage] Recovered \(account.email) via delegated refresh.")
+                            log.info("[fetchUsage] Recovered \(account.obfuscatedEmail) via delegated refresh.")
                         }
                     } catch {
                         log.error("[fetchUsage] Delegated refresh failed for active account: \(error.localizedDescription)")
@@ -934,13 +934,13 @@ final class AppState: ObservableObject {
                     // a permanent "Token expired" state between switches.
                     switch await refreshBackupInPlace(for: account) {
                     case .refreshed(let refreshed):
-                        log.info("[fetchUsage] Silently refreshed backup for \(account.email); retrying usage")
+                        log.info("[fetchUsage] Silently refreshed backup for \(account.obfuscatedEmail); retrying usage")
                         if let newToken = ClaudeService.extractAccessToken(from: refreshed),
                            let usage = await usageRespectingParking(accessToken: newToken, account: account) {
                             accountUsage[account.id] = usage
                             accountUsageSampledAt[account.id] = Date()
                             accountUsageErrors[account.id] = nil
-                            log.info("[fetchUsage] \(account.email): session=\(usage.fiveHour?.utilization ?? -1)%, weekly=\(usage.sevenDay?.utilization ?? -1)%")
+                            log.info("[fetchUsage] \(account.obfuscatedEmail): session=\(usage.fiveHour?.utilization ?? -1)%, weekly=\(usage.sevenDay?.utilization ?? -1)%")
                         }
                     case .grantRejected, .noBackup, .rotationLost:
                         // Only re-authentication mints a new refresh token or a
@@ -957,7 +957,7 @@ final class AppState: ObservableObject {
                     }
                 }
             } catch {
-                log.error("[fetchUsage] Failed to get usage for \(account.email): \(error.localizedDescription)")
+                log.error("[fetchUsage] Failed to get usage for \(account.obfuscatedEmail): \(error.localizedDescription)")
                 accountUsage[account.id] = nil
                 accountUsageSampledAt[account.id] = nil
                 accountUsageErrors[account.id] = UsageErrorState(isExpired: false, isRateLimited: false, message: String(localized: "Could not fetch usage: \(error.localizedDescription)", bundle: L10n.bundle))
@@ -981,12 +981,12 @@ final class AppState: ObservableObject {
         guard !accounts.isEmpty else { return }
 
         log.info("[diagnose] === Health Check ===")
-        log.info("[diagnose] Accounts: \(self.accounts.count), active: \(self.activeAccount?.email ?? "none")")
+        log.info("[diagnose] Accounts: \(self.accounts.count), active: \(self.activeAccount?.obfuscatedEmail ?? "none")")
 
         // Check live oauthAccount identity
         if let liveOAuth = keychain.readOAuthAccount() {
             let liveEmail = (liveOAuth["emailAddress"]?.value as? String) ?? "?"
-            log.info("[diagnose] Live oauthAccount: \(liveEmail)")
+            log.info("[diagnose] Live oauthAccount: \(liveEmail.maskedAsEmailAddress())")
         } else {
             log.warning("[diagnose] Live oauthAccount: MISSING")
         }
@@ -995,9 +995,9 @@ final class AppState: ObservableObject {
         for account in accounts {
             if let backup = keychain.getAccountBackup(forAccountId: account.id.uuidString) {
                 let backupEmail = (backup.oauthAccount["emailAddress"]?.value as? String) ?? "?"
-                log.info("[diagnose] Backup [\(account.email)]: OK (email=\(backupEmail))")
+                log.info("[diagnose] Backup [\(account.obfuscatedEmail)]: OK (email=\(backupEmail.maskedAsEmailAddress()))")
             } else {
-                log.warning("[diagnose] Backup [\(account.email)]: MISSING — switch will fail")
+                log.warning("[diagnose] Backup [\(account.obfuscatedEmail)]: MISSING — switch will fail")
             }
         }
 

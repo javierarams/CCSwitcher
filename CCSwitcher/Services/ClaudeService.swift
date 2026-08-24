@@ -406,7 +406,7 @@ final class ClaudeService: @unchecked Sendable {
                 let saved = keychain.saveAccountBackup(token: currentToken, oauthAccount: currentOAuth, forAccountId: currentAccount.id.uuidString)
                 log.info("[switchAccount] Step 1: Backup saved: \(saved)")
             } else {
-                log.warning("[switchAccount] Step 1: oauthAccount email (\(email)) != source (\(currentAccount.email)), skipping backup")
+                log.warning("[switchAccount] Step 1: oauthAccount email (\(email.maskedAsEmailAddress())) != source (\(currentAccount.obfuscatedEmail)), skipping backup")
             }
         } else {
             log.warning("[switchAccount] Step 1: Could not read current token or oauthAccount")
@@ -437,10 +437,10 @@ final class ClaudeService: @unchecked Sendable {
 
         if let email = status.email {
             guard email == targetAccount.email else {
-                log.error("[switchAccount] Step 4: Logged in as \(email) instead of \(targetAccount.email)")
+                log.error("[switchAccount] Step 4: Logged in as \(email.maskedAsEmailAddress()) instead of \(targetAccount.obfuscatedEmail)")
                 throw ClaudeServiceError.switchWrongAccount(expected: targetAccount.email, actual: email)
             }
-            log.info("[switchAccount] Step 4: Switch verified — logged in as \(email)")
+            log.info("[switchAccount] Step 4: Switch verified — logged in as \(email.maskedAsEmailAddress())")
             return SwitchOutcome(shadowedBy: nil)
         }
 
@@ -475,7 +475,7 @@ final class ClaudeService: @unchecked Sendable {
 
         guard let liveOAuth = keychain.readOAuthAccount(),
               (liveOAuth["emailAddress"]?.value as? String) == email else {
-            log.error("[switchAccount] ~/.claude.json identity does not match \(email)")
+            log.error("[switchAccount] ~/.claude.json identity does not match \(email.maskedAsEmailAddress())")
             return false
         }
 
@@ -495,7 +495,7 @@ final class ClaudeService: @unchecked Sendable {
             return false
         }
         let email = (oauthAccount["emailAddress"]?.value as? String) ?? "?"
-        log.info("[capture] Token + oauthAccount found (email=\(email)), saving backup...")
+        log.info("[capture] Token + oauthAccount found (email=\(email.maskedAsEmailAddress())), saving backup...")
         let result = keychain.saveAccountBackup(token: token, oauthAccount: oauthAccount, forAccountId: accountId)
         log.info("[capture] Save result: \(result)")
         return result
